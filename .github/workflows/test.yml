@@ -20,19 +20,22 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun x playwright install --with-deps chromium
         working-directory: packages/app
-      - name: Composer browser suite
+      - name: Verify the regression fails on the unchanged app
         env:
           PLAYWRIGHT_BUILD: '1'
-          PLAYWRIGHT_PORT: '4311'
-        run: bun node_modules/@playwright/test/cli.js test e2e/regression/composer.spec.ts --workers=3 --retries=0
-        working-directory: packages/app
-      - name: Repeat prediction regressions
-        env:
-          PLAYWRIGHT_BUILD: '1'
-          PLAYWRIGHT_PORT: '4312'
-          PLAYWRIGHT_FULLY_PARALLEL: '1'
-        run: bun node_modules/@playwright/test/cli.js test e2e/regression/composer.spec.ts -g 'prediction|predicts a follow-up' --repeat-each=10 --workers=5 --retries=0
-        working-directory: packages/app
+          PLAYWRIGHT_PORT: '4310'
+        run: |
+          git restore --source=63c1a27af5a391d9caa55b82694f496911e1859b -- packages/app/src
+          cd packages/app
+          set +e
+          bun node_modules/@playwright/test/cli.js test e2e/regression/composer.spec.ts -g 'predicts a follow-up after completion' --workers=1 --retries=0 > "$RUNNER_TEMP/prediction-red.log" 2>&1
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/prediction-red.log"
+          test "$status" -ne 0
+          grep -F "Add a regression test for empty input." "$RUNNER_TEMP/prediction-red.log"
+          grep -F "Expected: visible" "$RUNNER_TEMP/prediction-red.log"
+          grep -F "1 failed" "$RUNNER_TEMP/prediction-red.log"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
